@@ -7,12 +7,11 @@ const credentials = new AWS.SharedIniFileCredentials({profile: 'alonit-account'}
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.json(),
-    defaultMeta: { service: 'user-service' },
     transports: [
         new winston.transports.Console(),
         new WinstonCloudWatch({
-            logGroupName: 'testing',
-            logStreamName: 'first',
+            logGroupName: 'data-collection',
+            logStreamName: 'binance-lob',
             awsAccessKeyId: credentials.accessKeyId,
             awsSecretKey: credentials.secretAccessKey,
             awsRegion: "ap-southeast-1"
@@ -48,9 +47,9 @@ binance.websockets.depth(config.get("symbols"), (depth) => {
 
     dynamo.put(params, function(err, data) {
         if (err) {
-            logger.error("Failed. Error JSON:", JSON.stringify(err, null, 2));
+            logger.error(`Failed. Error JSON:${JSON.stringify(err, null, 2)}`);
         } else {
-            logger.info("PutItem succeeded:", firstUpdateId, " to ", finalUpdateId);
+            logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
         }
     });
 });
@@ -70,9 +69,9 @@ function takeSnapshot() {
             };
             dynamo.put(params, function(err, data) {
                 if (err) {
-                    logger.error("Failed. Error JSON:", JSON.stringify(err, null, 2));
+                    logger.error(`Failed. Error JSON: ${JSON.stringify(err, null, 2)}`);
                 } else {
-                    logger.info("PutItem succeeded:", symbol);
+                    logger.info(`lob snapshot: ${JSON.stringify({'symbol': symbol, 'lastUpdateId': depth.lastUpdateId})}`);
                 }
             });
         }, 1000);
