@@ -1,0 +1,6 @@
+{
+  "binance-lob-updates-table-name": "binance-lob-updates",
+  "binance-lob-snapshots-table-name": "binance-lob-snapshots",
+  "snapshots-periodicity-ms": 600000,
+  "symbols": ["BNBBTC"]
+}
