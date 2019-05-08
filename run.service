@@ -1,0 +1,12 @@
+[Unit]
+Description=binance lob data
+Documentation=https://example.com
+
+
+[Service]
+WorkingDirectory=/home/ubuntu/at-todra-data/
+ExecStart=/usr/bin/node binanceImporter.js
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
