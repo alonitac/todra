@@ -62,7 +62,7 @@ var logger = winston.createLogger({
     ]
 });
 var mongodb = null;
-var client = new MongoClient(config.get("mongo-uri"));
+var client = new MongoClient(config.get("mongo-uri"), { useNewUrlParser: true });
 client.connect(function (err) {
     if (err) {
         logger.error('unable to connect to mongo');
@@ -79,33 +79,30 @@ AWS.config.update({
 });
 var dynamo = new AWS.DynamoDB.DocumentClient();
 binance.websockets.depth(config.get("symbols"), function (depth) { return __awaiter(_this, void 0, void 0, function () {
-    var eventType, eventTime, symbol, finalUpdateId, firstUpdateId, bidDepth, askDepth, params;
+    var eventType, eventTime, symbol, finalUpdateId, firstUpdateId, bidDepth, askDepth, params, r;
     return __generator(this, function (_a) {
-        eventType = depth.e, eventTime = depth.E, symbol = depth.s, finalUpdateId = depth.u, firstUpdateId = depth.U, bidDepth = depth.b, askDepth = depth.a;
-        params = {
-            TableName: config.get("binance-lob-updates-table-name"),
-            Item: {
-                "firstUpdateId": firstUpdateId,
-                "finalUpdateId": finalUpdateId,
-                "symbol": symbol,
-                "eventTime": eventTime,
-                "bidDepth": bidDepth,
-                "askDepth": askDepth
-            }
-        };
-        dynamo.put(params, function (err, data) {
-            if (err) {
-                logger.error("Update depth failed:" + JSON.stringify(err, null, 2));
-            }
-            // else {
-            //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
-            // }
-        });
-        mongodb.collection(symbol).insertOne({
-            "firstUpdateId": firstUpdateId,
-            "finalUpdateId": finalUpdateId
-        });
-        return [2 /*return*/];
+        switch (_a.label) {
+            case 0:
+                eventType = depth.e, eventTime = depth.E, symbol = depth.s, finalUpdateId = depth.u, firstUpdateId = depth.U, bidDepth = depth.b, askDepth = depth.a;
+                params = {
+                    TableName: config.get("binance-lob-updates-table-name"),
+                    Item: {
+                        "firstUpdateId": firstUpdateId,
+                        "finalUpdateId": finalUpdateId,
+                        "symbol": symbol,
+                        "eventTime": eventTime,
+                        "bidDepth": bidDepth,
+                        "askDepth": askDepth
+                    }
+                };
+                return [4 /*yield*/, mongodb.collection(symbol).insertOne({
+                        "firstUpdateId": firstUpdateId,
+                        "finalUpdateId": finalUpdateId
+                    })];
+            case 1:
+                r = _a.sent();
+                return [2 /*return*/];
+        }
     });
 }); });
 function takeSnapshot(symbol, lastSnapId) {
@@ -113,28 +110,23 @@ function takeSnapshot(symbol, lastSnapId) {
     binance.depth(symbol, function (error, depth, symbol) { return __awaiter(_this, void 0, void 0, function () {
         var params;
         return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0:
-                    setTimeout(takeSnapshot.bind(symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
-                    params = {
-                        TableName: config.get("binance-lob-snapshots-table-name"),
-                        Item: {
-                            "lastUpdateId": depth.lastUpdateId,
-                            "symbol": symbol,
-                            "bids": depth.bids,
-                            "asks": depth.asks
-                        }
-                    };
-                    dynamo.put(params, function (err, data) {
-                        if (err) {
-                            logger.error("snapshot failed: " + JSON.stringify(err, null, 2));
-                        }
-                    });
-                    return [4 /*yield*/, validateConsistency(symbol, lastSnapId, depth.lastUpdateId)];
-                case 1:
-                    _a.sent();
-                    return [2 /*return*/];
-            }
+            setTimeout(takeSnapshot.bind(null, symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
+            params = {
+                TableName: config.get("binance-lob-snapshots-table-name"),
+                Item: {
+                    "lastUpdateId": depth.lastUpdateId,
+                    "symbol": symbol,
+                    "bids": depth.bids,
+                    "asks": depth.asks
+                }
+            };
+            // dynamo.put(params, function(err, data) {
+            //     if (err) {
+            //         logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
+            //     }
+            // });
+            validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
+            return [2 /*return*/];
         });
     }); }, 1000);
 }
@@ -150,14 +142,20 @@ function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
                 case 1:
                     r = _a.sent();
                     lastId = null;
-                    r.forEach(function (doc) {
-                        if (lastId) {
-                            if (!doc.firstUpdateId === lastId + 1) {
-                                logger.info("expect " + (lastId + 1) + " but got " + doc.firstUpdateId);
+                    return [4 /*yield*/, r.forEach(function (doc) {
+                            if (lastId) {
+                                if (!doc.firstUpdateId === lastId + 1) {
+                                    logger.info("expect " + (lastId + 1) + " but got " + doc.firstUpdateId);
+                                }
                             }
-                        }
-                        lastId = doc.finalUpdateId;
-                    });
+                            else {
+                                logger.info("consistency validation. firstId " + doc.firstUpdateId);
+                            }
+                            lastId = doc.finalUpdateId;
+                        })];
+                case 2:
+                    _a.sent();
+                    logger.info("data is consistency. lastId " + lastId);
                     return [2 /*return*/];
             }
         });
@@ -165,6 +163,6 @@ function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
 }
 var symbols = config.get("symbols");
 symbols.forEach(function (symbol) {
-    setTimeout(takeSnapshot.bind(symbol, 0), 5000);
+    setTimeout(takeSnapshot.bind(null, symbol, 0), 5000);
 });
 //# sourceMappingURL=binanceImporter.js.map

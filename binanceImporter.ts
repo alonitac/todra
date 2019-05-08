@@ -26,7 +26,7 @@ const logger = winston.createLogger({
 });
 
 let mongodb = null;
-const client = new MongoClient(config.get("mongo-uri"));
+const client = new MongoClient(config.get("mongo-uri"), { useNewUrlParser: true });
 client.connect(function(err) {
     if (err){
         logger.error('unable to connect to mongo');
@@ -57,15 +57,15 @@ binance.websockets.depth(config.get("symbols"), async (depth) => {
         }
     };
 
-    dynamo.put(params, function(err, data) {
-        if (err) {
-            logger.error(`Update depth failed:${JSON.stringify(err, null, 2)}`);
-        }
-        // else {
-        //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
-        // }
-    });
-    mongodb.collection(symbol).insertOne({
+    // dynamo.put(params, function(err, data) {
+    //     if (err) {
+    //         logger.error(`Update depth failed:${JSON.stringify(err, null, 2)}`);
+    //     }
+    //     // else {
+    //     //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
+    //     // }
+    // });
+    let r = await mongodb.collection(symbol).insertOne({
         "firstUpdateId": firstUpdateId,
         "finalUpdateId": finalUpdateId
     });
@@ -73,7 +73,7 @@ binance.websockets.depth(config.get("symbols"), async (depth) => {
 
 function takeSnapshot(symbol, lastSnapId) {
     binance.depth(symbol, async (error, depth, symbol) => {
-        setTimeout(takeSnapshot.bind(symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
+        setTimeout(takeSnapshot.bind(null, symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
         const params = {
             TableName: config.get("binance-lob-snapshots-table-name"),
             Item: {
@@ -83,13 +83,12 @@ function takeSnapshot(symbol, lastSnapId) {
                 "asks": depth.asks
             }
         };
-        dynamo.put(params, function(err, data) {
-            if (err) {
-                logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
-            }
-        });
-        await validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
-
+        // dynamo.put(params, function(err, data) {
+        //     if (err) {
+        //         logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
+        //     }
+        // });
+        validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
     }, 1000);
 }
 
@@ -101,17 +100,20 @@ async function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
         }
     ).sort({ firstUpdateId: 1 });
     let lastId = null;
-    r.forEach((doc) => {
+    await r.forEach((doc) => {
         if (lastId){
             if (!doc.firstUpdateId === lastId + 1){
                 logger.info(`expect ${lastId + 1} but got ${doc.firstUpdateId}`);
             }
+        }else{
+            logger.info(`consistency validation. firstId ${doc.firstUpdateId}`);
         }
         lastId = doc.finalUpdateId;
     });
+    logger.info(`data is consistency. lastId ${lastId}`);
 }
 
 const symbols = config.get("symbols");
 symbols.forEach(function(symbol) {
-    setTimeout(takeSnapshot.bind(symbol, 0), 5000);
+    setTimeout(takeSnapshot.bind(null, symbol, 0), 5000);
 });
