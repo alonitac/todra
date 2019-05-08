@@ -95,6 +95,14 @@ binance.websockets.depth(config.get("symbols"), function (depth) { return __awai
                         "askDepth": askDepth
                     }
                 };
+                dynamo.put(params, function (err, data) {
+                    if (err) {
+                        logger.error("Update depth failed:" + JSON.stringify(err, null, 2));
+                    }
+                    // else {
+                    //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
+                    // }
+                });
                 return [4 /*yield*/, mongodb.collection(symbol).insertOne({
                         "firstUpdateId": firstUpdateId,
                         "finalUpdateId": finalUpdateId
@@ -120,11 +128,11 @@ function takeSnapshot(symbol, lastSnapId) {
                     "asks": depth.asks
                 }
             };
-            // dynamo.put(params, function(err, data) {
-            //     if (err) {
-            //         logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
-            //     }
-            // });
+            dynamo.put(params, function (err, data) {
+                if (err) {
+                    logger.error("snapshot failed: " + JSON.stringify(err, null, 2));
+                }
+            });
             validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
             return [2 /*return*/];
         });

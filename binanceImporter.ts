@@ -57,14 +57,14 @@ binance.websockets.depth(config.get("symbols"), async (depth) => {
         }
     };
 
-    // dynamo.put(params, function(err, data) {
-    //     if (err) {
-    //         logger.error(`Update depth failed:${JSON.stringify(err, null, 2)}`);
-    //     }
-    //     // else {
-    //     //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
-    //     // }
-    // });
+    dynamo.put(params, function(err, data) {
+        if (err) {
+            logger.error(`Update depth failed:${JSON.stringify(err, null, 2)}`);
+        }
+        // else {
+        //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
+        // }
+    });
     let r = await mongodb.collection(symbol).insertOne({
         "firstUpdateId": firstUpdateId,
         "finalUpdateId": finalUpdateId
@@ -83,11 +83,11 @@ function takeSnapshot(symbol, lastSnapId) {
                 "asks": depth.asks
             }
         };
-        // dynamo.put(params, function(err, data) {
-        //     if (err) {
-        //         logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
-        //     }
-        // });
+        dynamo.put(params, function(err, data) {
+            if (err) {
+                logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
+            }
+        });
         validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
     }, 1000);
 }
