@@ -1,7 +1,5 @@
 [Unit]
 Description=binance lob data
-Documentation=https://example.com
-
 
 [Service]
 WorkingDirectory=/home/ubuntu/at-todra-data/
