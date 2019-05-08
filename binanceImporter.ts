@@ -2,6 +2,12 @@ const winston = require('winston');
 const WinstonCloudWatch = require('winston-cloudwatch');
 import * as AWS from "aws-sdk";
 const config = require('config');
+const MongoClient = require('mongodb').MongoClient;
+const binance = require('node-binance-api')().options({
+    APIKEY: '<key>',
+    APISECRET: '<secret>',
+    useServerTime: true
+});
 
 const credentials = new AWS.SharedIniFileCredentials({profile: 'alonit-account'});
 const logger = winston.createLogger({
@@ -19,10 +25,16 @@ const logger = winston.createLogger({
     ]
 });
 
-const binance = require('node-binance-api')().options({
-    APIKEY: '<key>',
-    APISECRET: '<secret>',
-    useServerTime: true
+let mongodb = null;
+const client = new MongoClient(config.get("mongo-uri"));
+client.connect(function(err) {
+    if (err){
+        logger.error('unable to connect to mongo');
+    }else{
+        logger.info('successfully connected to mongo');
+        mongodb = client.db(config.get("mongo-db-name"));
+    }
+    // client.close();
 });
 
 AWS.config.credentials = credentials;
@@ -31,7 +43,7 @@ AWS.config.update({
 });
 const dynamo = new AWS.DynamoDB.DocumentClient();
 
-binance.websockets.depth(config.get("symbols"), (depth) => {
+binance.websockets.depth(config.get("symbols"), async (depth) => {
     let {e:eventType, E:eventTime, s:symbol, u:finalUpdateId, U:firstUpdateId, b:bidDepth, a:askDepth} = depth;
     const params = {
         TableName: config.get("binance-lob-updates-table-name"),
@@ -47,36 +59,59 @@ binance.websockets.depth(config.get("symbols"), (depth) => {
 
     dynamo.put(params, function(err, data) {
         if (err) {
-            logger.error(`Failed. Error JSON:${JSON.stringify(err, null, 2)}`);
-        } else {
-            logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
+            logger.error(`Update depth failed:${JSON.stringify(err, null, 2)}`);
         }
+        // else {
+        //     logger.info(`lob update ${JSON.stringify({'symbol':symbol, 'fromId': firstUpdateId, 'toId': finalUpdateId})}`);
+        // }
+    });
+    mongodb.collection(symbol).insertOne({
+        "firstUpdateId": firstUpdateId,
+        "finalUpdateId": finalUpdateId
     });
 });
 
-function takeSnapshot() {
-    const symbols = config.get("symbols");
-    symbols.forEach(function(element) {
-        binance.depth(element, (error, depth, symbol) => {
-            const params = {
-                TableName: config.get("binance-lob-snapshots-table-name"),
-                Item: {
-                    "lastUpdateId": depth.lastUpdateId,
-                    "symbol": symbol,
-                    "bids": depth.bids,
-                    "asks": depth.asks
-                }
-            };
-            dynamo.put(params, function(err, data) {
-                if (err) {
-                    logger.error(`Failed. Error JSON: ${JSON.stringify(err, null, 2)}`);
-                } else {
-                    logger.info(`lob snapshot: ${JSON.stringify({'symbol': symbol, 'lastUpdateId': depth.lastUpdateId})}`);
-                }
-            });
-        }, 1000);
-    });
-    setTimeout(takeSnapshot, config.get("snapshots-periodicity-ms"));
+function takeSnapshot(symbol, lastSnapId) {
+    binance.depth(symbol, async (error, depth, symbol) => {
+        setTimeout(takeSnapshot.bind(symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
+        const params = {
+            TableName: config.get("binance-lob-snapshots-table-name"),
+            Item: {
+                "lastUpdateId": depth.lastUpdateId,
+                "symbol": symbol,
+                "bids": depth.bids,
+                "asks": depth.asks
+            }
+        };
+        dynamo.put(params, function(err, data) {
+            if (err) {
+                logger.error(`snapshot failed: ${JSON.stringify(err, null, 2)}`);
+            }
+        });
+        await validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
+
+    }, 1000);
 }
 
-setTimeout(takeSnapshot, 5000);
+async function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
+    let r = await mongodb.collection(symbol).find(
+        {
+            finalUpdateId: { $gte: firstUpdateId },
+            firstUpdateId: { $lte: lastUpdateId }
+        }
+    ).sort({ firstUpdateId: 1 });
+    let lastId = null;
+    r.forEach((doc) => {
+        if (lastId){
+            if (!doc.firstUpdateId === lastId + 1){
+                logger.info(`expect ${lastId + 1} but got ${doc.firstUpdateId}`);
+            }
+        }
+        lastId = doc.finalUpdateId;
+    });
+}
+
+const symbols = config.get("symbols");
+symbols.forEach(function(symbol) {
+    setTimeout(takeSnapshot.bind(symbol, 0), 5000);
+});
