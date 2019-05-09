@@ -71,7 +71,7 @@ binance.websockets.depth(config.get("symbols"), async (depth) => {
     });
 });
 
-function takeSnapshot(symbol, lastSnapId) {
+async function takeSnapshot(symbol, lastSnapId) {
     binance.depth(symbol, async (error, depth, symbol) => {
         setTimeout(takeSnapshot.bind(null, symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
         const params = {
@@ -100,17 +100,24 @@ async function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
         }
     ).sort({ firstUpdateId: 1 });
     let lastId = null;
+    let firstId = null;
     await r.forEach((doc) => {
         if (lastId){
             if (!doc.firstUpdateId === lastId + 1){
                 logger.info(`expect ${lastId + 1} but got ${doc.firstUpdateId}`);
             }
         }else{
-            logger.info(`consistency validation. firstId ${doc.firstUpdateId}`);
+            firstId = doc.firstUpdateId;
         }
         lastId = doc.finalUpdateId;
     });
-    logger.info(`data is consistency. lastId ${lastId}`);
+    logger.info(`data is consistency. ${firstId} - ${lastId}`);
+    mongodb.collection(symbol).remove(
+        {
+            finalUpdateId: { $gte: firstUpdateId },
+            firstUpdateId: { $lte: lastUpdateId }
+        }
+    );
 }
 
 const symbols = config.get("symbols");

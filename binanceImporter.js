@@ -114,33 +114,38 @@ binance.websockets.depth(config.get("symbols"), function (depth) { return __awai
     });
 }); });
 function takeSnapshot(symbol, lastSnapId) {
-    var _this = this;
-    binance.depth(symbol, function (error, depth, symbol) { return __awaiter(_this, void 0, void 0, function () {
-        var params;
+    return __awaiter(this, void 0, void 0, function () {
+        var _this = this;
         return __generator(this, function (_a) {
-            setTimeout(takeSnapshot.bind(null, symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
-            params = {
-                TableName: config.get("binance-lob-snapshots-table-name"),
-                Item: {
-                    "lastUpdateId": depth.lastUpdateId,
-                    "symbol": symbol,
-                    "bids": depth.bids,
-                    "asks": depth.asks
-                }
-            };
-            dynamo.put(params, function (err, data) {
-                if (err) {
-                    logger.error("snapshot failed: " + JSON.stringify(err, null, 2));
-                }
-            });
-            validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
+            binance.depth(symbol, function (error, depth, symbol) { return __awaiter(_this, void 0, void 0, function () {
+                var params;
+                return __generator(this, function (_a) {
+                    setTimeout(takeSnapshot.bind(null, symbol, depth.lastUpdateId), config.get("snapshots-periodicity-ms"));
+                    params = {
+                        TableName: config.get("binance-lob-snapshots-table-name"),
+                        Item: {
+                            "lastUpdateId": depth.lastUpdateId,
+                            "symbol": symbol,
+                            "bids": depth.bids,
+                            "asks": depth.asks
+                        }
+                    };
+                    dynamo.put(params, function (err, data) {
+                        if (err) {
+                            logger.error("snapshot failed: " + JSON.stringify(err, null, 2));
+                        }
+                    });
+                    validateConsistency(symbol, lastSnapId, depth.lastUpdateId);
+                    return [2 /*return*/];
+                });
+            }); }, 1000);
             return [2 /*return*/];
         });
-    }); }, 1000);
+    });
 }
 function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
     return __awaiter(this, void 0, void 0, function () {
-        var r, lastId;
+        var r, lastId, firstId;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, mongodb.collection(symbol).find({
@@ -150,6 +155,7 @@ function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
                 case 1:
                     r = _a.sent();
                     lastId = null;
+                    firstId = null;
                     return [4 /*yield*/, r.forEach(function (doc) {
                             if (lastId) {
                                 if (!doc.firstUpdateId === lastId + 1) {
@@ -157,13 +163,17 @@ function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
                                 }
                             }
                             else {
-                                logger.info("consistency validation. firstId " + doc.firstUpdateId);
+                                firstId = doc.firstUpdateId;
                             }
                             lastId = doc.finalUpdateId;
                         })];
                 case 2:
                     _a.sent();
-                    logger.info("data is consistency. lastId " + lastId);
+                    logger.info("data is consistency. " + firstId + " - " + lastId);
+                    mongodb.collection(symbol).remove({
+                        finalUpdateId: { $gte: firstUpdateId },
+                        firstUpdateId: { $lte: lastUpdateId }
+                    });
                     return [2 /*return*/];
             }
         });
