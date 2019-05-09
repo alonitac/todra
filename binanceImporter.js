@@ -170,7 +170,7 @@ function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
                         })];
                 case 2:
                     _a.sent();
-                    logger.info("data is consistency. " + firstId + " - " + lastId);
+                    logger.info(symbol + " checked. IDs " + firstId + " - " + lastId);
                     mongodb.collection(symbol).remove({
                         finalUpdateId: { $gte: firstUpdateId },
                         firstUpdateId: { $lte: lastUpdateId }
