@@ -30,6 +30,7 @@ const client = new MongoClient(config.get("mongo-uri"), { useNewUrlParser: true 
 client.connect(function(err) {
     if (err){
         logger.error('unable to connect to mongo');
+        process.exit(1);
     }else{
         logger.info('successfully connected to mongo');
         mongodb = client.db(config.get("mongo-db-name"));
