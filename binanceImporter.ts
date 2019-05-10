@@ -105,7 +105,7 @@ async function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
     await r.forEach((doc) => {
         if (lastId){
             if (!doc.firstUpdateId === lastId + 1){
-                logger.info(`expect ${lastId + 1} but got ${doc.firstUpdateId}`);
+                logger.error(`in ${symbol} expect ${lastId + 1} but got ${doc.firstUpdateId}`);
             }
         }else{
             firstId = doc.firstUpdateId;

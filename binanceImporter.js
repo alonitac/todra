@@ -160,7 +160,7 @@ function validateConsistency(symbol, firstUpdateId, lastUpdateId) {
                     return [4 /*yield*/, r.forEach(function (doc) {
                             if (lastId) {
                                 if (!doc.firstUpdateId === lastId + 1) {
-                                    logger.info("expect " + (lastId + 1) + " but got " + doc.firstUpdateId);
+                                    logger.error("in " + symbol + " expect " + (lastId + 1) + " but got " + doc.firstUpdateId);
                                 }
                             }
                             else {
